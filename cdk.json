@@ -1,0 +1,7 @@
+{
+  "app": "npx ts-node bin/event-trigger-ecs-scheduled-task.ts",
+  "context": {
+    "@aws-cdk/core:enableStackNameDuplicates": "true",
+    "aws-cdk:enableDiffNoFail": "true"
+  }
+}
