@@ -1,0 +1,604 @@
+Resources:
+    SourceQueue6E809DF0:
+      Type: AWS::SQS::Queue
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/SourceQueue/Resource
+    EmptyQueueAlarmF4EC6516:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        ComparisonOperator: LessThanOrEqualToThreshold
+        EvaluationPeriods: 1
+        Metrics:
+          - Expression: notVisibleMetric + visibleMetric
+            Id: expr_1
+          - Id: notVisibleMetric
+            MetricStat:
+              Metric:
+                Dimensions:
+                  - Name: QueueName
+                    Value:
+                      Fn::GetAtt:
+                        - SourceQueue6E809DF0
+                        - QueueName
+                MetricName: ApproximateNumberOfMessagesNotVisible
+                Namespace: AWS/SQS
+              Period: 60
+              Stat: Sum
+            ReturnData: false
+          - Id: visibleMetric
+            MetricStat:
+              Metric:
+                Dimensions:
+                  - Name: QueueName
+                    Value:
+                      Fn::GetAtt:
+                        - SourceQueue6E809DF0
+                        - QueueName
+                MetricName: ApproximateNumberOfMessagesVisible
+                Namespace: AWS/SQS
+              Period: 60
+              Stat: Sum
+            ReturnData: false
+        Threshold: 0
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/EmptyQueueAlarm/Resource
+    SQSEmptyRule1F5D9C2B:
+      Type: AWS::Events::Rule
+      Properties:
+        EventPattern:
+          source:
+            - aws.cloudwatch
+          detail-type:
+            - CloudWatch Alarm State Change
+          resources:
+            - prefix:
+                Fn::GetAtt:
+                  - EmptyQueueAlarmF4EC6516
+                  - Arn
+          detail:
+            state:
+              value:
+                - ALARM
+        State: ENABLED
+        Targets:
+          - Arn:
+              Fn::GetAtt:
+                - ClusterEB0386A7
+                - Arn
+            EcsParameters:
+              LaunchType: FARGATE
+              NetworkConfiguration:
+                AwsVpcConfiguration:
+                  AssignPublicIp: DISABLED
+                  SecurityGroups:
+                    - Fn::GetAtt:
+                        - JobSecurityGroupE68C281D
+                        - GroupId
+                  Subnets:
+                    - Ref: ClusterVpcPrivateSubnet1SubnetA4EB481A
+                    - Ref: ClusterVpcPrivateSubnet2SubnetBD1ECB6E
+              TaskCount: 1
+              TaskDefinitionArn:
+                Ref: JobB9D00F9F
+            Id: Target0
+            Input: '{"containerOverrides":[{"name":"TheContainer","environment":[{"name":"I_WAS_TRIGGERED","value":"From CloudWatch Events"}]}]}'
+            RoleArn:
+              Fn::GetAtt:
+                - JobEventsRole0634F35C
+                - Arn
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/SQSEmptyRule/Resource
+    ClusterEB0386A7:
+      Type: AWS::ECS::Cluster
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Resource
+    ClusterVpcFAA3CEDF:
+      Type: AWS::EC2::VPC
+      Properties:
+        CidrBlock: 10.0.0.0/16
+        EnableDnsHostnames: true
+        EnableDnsSupport: true
+        InstanceTenancy: default
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/Resource
+    ClusterVpcPublicSubnet1SubnetA9F7E0A5:
+      Type: AWS::EC2::Subnet
+      Properties:
+        CidrBlock: 10.0.0.0/18
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        AvailabilityZone:
+          Fn::Select:
+            - 0
+            - Fn::GetAZs: ""
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: aws-cdk:subnet-name
+            Value: Public
+          - Key: aws-cdk:subnet-type
+            Value: Public
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1/Subnet
+    ClusterVpcPublicSubnet1RouteTable5594A636:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1/RouteTable
+    ClusterVpcPublicSubnet1RouteTableAssociation0FBEF1F4:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPublicSubnet1RouteTable5594A636
+        SubnetId:
+          Ref: ClusterVpcPublicSubnet1SubnetA9F7E0A5
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1/RouteTableAssociation
+    ClusterVpcPublicSubnet1DefaultRoute62DA4B4B:
+      Type: AWS::EC2::Route
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPublicSubnet1RouteTable5594A636
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId:
+          Ref: ClusterVpcIGW1E358A6E
+      DependsOn:
+        - ClusterVpcVPCGW47AC17E9
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1/DefaultRoute
+    ClusterVpcPublicSubnet1EIP433C56EE:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: vpc
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1/EIP
+    ClusterVpcPublicSubnet1NATGateway0693C346:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - ClusterVpcPublicSubnet1EIP433C56EE
+            - AllocationId
+        SubnetId:
+          Ref: ClusterVpcPublicSubnet1SubnetA9F7E0A5
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet1/NATGateway
+    ClusterVpcPublicSubnet2Subnet059113C4:
+      Type: AWS::EC2::Subnet
+      Properties:
+        CidrBlock: 10.0.64.0/18
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        AvailabilityZone:
+          Fn::Select:
+            - 1
+            - Fn::GetAZs: ""
+        MapPublicIpOnLaunch: true
+        Tags:
+          - Key: aws-cdk:subnet-name
+            Value: Public
+          - Key: aws-cdk:subnet-type
+            Value: Public
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2/Subnet
+    ClusterVpcPublicSubnet2RouteTable7B43F18C:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2/RouteTable
+    ClusterVpcPublicSubnet2RouteTableAssociation8446B27D:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPublicSubnet2RouteTable7B43F18C
+        SubnetId:
+          Ref: ClusterVpcPublicSubnet2Subnet059113C4
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2/RouteTableAssociation
+    ClusterVpcPublicSubnet2DefaultRoute97446C8A:
+      Type: AWS::EC2::Route
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPublicSubnet2RouteTable7B43F18C
+        DestinationCidrBlock: 0.0.0.0/0
+        GatewayId:
+          Ref: ClusterVpcIGW1E358A6E
+      DependsOn:
+        - ClusterVpcVPCGW47AC17E9
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2/DefaultRoute
+    ClusterVpcPublicSubnet2EIP203DF3E5:
+      Type: AWS::EC2::EIP
+      Properties:
+        Domain: vpc
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2/EIP
+    ClusterVpcPublicSubnet2NATGateway00B24686:
+      Type: AWS::EC2::NatGateway
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - ClusterVpcPublicSubnet2EIP203DF3E5
+            - AllocationId
+        SubnetId:
+          Ref: ClusterVpcPublicSubnet2Subnet059113C4
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PublicSubnet2/NATGateway
+    ClusterVpcPrivateSubnet1SubnetA4EB481A:
+      Type: AWS::EC2::Subnet
+      Properties:
+        CidrBlock: 10.0.128.0/18
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        AvailabilityZone:
+          Fn::Select:
+            - 0
+            - Fn::GetAZs: ""
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: aws-cdk:subnet-name
+            Value: Private
+          - Key: aws-cdk:subnet-type
+            Value: Private
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet1
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet1/Subnet
+    ClusterVpcPrivateSubnet1RouteTable5AAEDA3F:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet1
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet1/RouteTable
+    ClusterVpcPrivateSubnet1RouteTableAssociation9B8A88D9:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPrivateSubnet1RouteTable5AAEDA3F
+        SubnetId:
+          Ref: ClusterVpcPrivateSubnet1SubnetA4EB481A
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet1/RouteTableAssociation
+    ClusterVpcPrivateSubnet1DefaultRoute3B4D40DD:
+      Type: AWS::EC2::Route
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPrivateSubnet1RouteTable5AAEDA3F
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId:
+          Ref: ClusterVpcPublicSubnet1NATGateway0693C346
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet1/DefaultRoute
+    ClusterVpcPrivateSubnet2SubnetBD1ECB6E:
+      Type: AWS::EC2::Subnet
+      Properties:
+        CidrBlock: 10.0.192.0/18
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        AvailabilityZone:
+          Fn::Select:
+            - 1
+            - Fn::GetAZs: ""
+        MapPublicIpOnLaunch: false
+        Tags:
+          - Key: aws-cdk:subnet-name
+            Value: Private
+          - Key: aws-cdk:subnet-type
+            Value: Private
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet2
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet2/Subnet
+    ClusterVpcPrivateSubnet2RouteTable73064A66:
+      Type: AWS::EC2::RouteTable
+      Properties:
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet2
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet2/RouteTable
+    ClusterVpcPrivateSubnet2RouteTableAssociationFB21349E:
+      Type: AWS::EC2::SubnetRouteTableAssociation
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPrivateSubnet2RouteTable73064A66
+        SubnetId:
+          Ref: ClusterVpcPrivateSubnet2SubnetBD1ECB6E
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet2/RouteTableAssociation
+    ClusterVpcPrivateSubnet2DefaultRoute011666AF:
+      Type: AWS::EC2::Route
+      Properties:
+        RouteTableId:
+          Ref: ClusterVpcPrivateSubnet2RouteTable73064A66
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId:
+          Ref: ClusterVpcPublicSubnet2NATGateway00B24686
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/PrivateSubnet2/DefaultRoute
+    ClusterVpcIGW1E358A6E:
+      Type: AWS::EC2::InternetGateway
+      Properties:
+        Tags:
+          - Key: Name
+            Value: EventTriggerEcsScheduledTaskStack/Cluster/Vpc
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/IGW
+    ClusterVpcVPCGW47AC17E9:
+      Type: AWS::EC2::VPCGatewayAttachment
+      Properties:
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+        InternetGatewayId:
+          Ref: ClusterVpcIGW1E358A6E
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Cluster/Vpc/VPCGW
+    JobTaskRole8AD3B4F0:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+          Version: "2012-10-17"
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/TaskRole/Resource
+    JobB9D00F9F:
+      Type: AWS::ECS::TaskDefinition
+      Properties:
+        ContainerDefinitions:
+          - Essential: true
+            Image:
+              Fn::Join:
+                - ""
+                - - Ref: AWS::AccountId
+                  - .dkr.ecr.
+                  - Ref: AWS::Region
+                  - "."
+                  - Ref: AWS::URLSuffix
+                  - /aws-cdk/assets:abfb3b75463d16777bac7a4a4ff71c4ca3c1d055e9baad0d74bb2c51abe589fc
+            LogConfiguration:
+              LogDriver: awslogs
+              Options:
+                awslogs-group:
+                  Ref: JobTheContainerLogGroup1844CEFD
+                awslogs-stream-prefix: EventDemo
+                awslogs-region:
+                  Ref: AWS::Region
+            Memory: 256
+            Name: TheContainer
+        Cpu: "256"
+        ExecutionRoleArn:
+          Fn::GetAtt:
+            - JobExecutionRole2C045EDD
+            - Arn
+        Family: EventTriggerEcsScheduledTaskStackJobFB18EC0A
+        Memory: "512"
+        NetworkMode: awsvpc
+        RequiresCompatibilities:
+          - FARGATE
+        TaskRoleArn:
+          Fn::GetAtt:
+            - JobTaskRole8AD3B4F0
+            - Arn
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/Resource
+    JobTheContainerLogGroup1844CEFD:
+      Type: AWS::Logs::LogGroup
+      UpdateReplacePolicy: Retain
+      DeletionPolicy: Retain
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/TheContainer/LogGroup/Resource
+    JobExecutionRole2C045EDD:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: ecs-tasks.amazonaws.com
+          Version: "2012-10-17"
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/ExecutionRole/Resource
+    JobExecutionRoleDefaultPolicy70B7FDC7:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action:
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                - ecr:BatchGetImage
+              Effect: Allow
+              Resource:
+                Fn::Join:
+                  - ""
+                  - - "arn:"
+                    - Ref: AWS::Partition
+                    - ":ecr:"
+                    - Ref: AWS::Region
+                    - ":"
+                    - Ref: AWS::AccountId
+                    - :repository/aws-cdk/assets
+            - Action: ecr:GetAuthorizationToken
+              Effect: Allow
+              Resource: "*"
+            - Action:
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Effect: Allow
+              Resource:
+                Fn::GetAtt:
+                  - JobTheContainerLogGroup1844CEFD
+                  - Arn
+          Version: "2012-10-17"
+        PolicyName: JobExecutionRoleDefaultPolicy70B7FDC7
+        Roles:
+          - Ref: JobExecutionRole2C045EDD
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/ExecutionRole/DefaultPolicy/Resource
+    JobSecurityGroupE68C281D:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: EventTriggerEcsScheduledTaskStack/Job/SecurityGroup
+        SecurityGroupEgress:
+          - CidrIp: 0.0.0.0/0
+            Description: Allow all outbound traffic by default
+            IpProtocol: "-1"
+        VpcId:
+          Ref: ClusterVpcFAA3CEDF
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/SecurityGroup/Resource
+    JobEventsRole0634F35C:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Statement:
+            - Action: sts:AssumeRole
+              Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+          Version: "2012-10-17"
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/EventsRole/Resource
+    JobEventsRoleDefaultPolicy2850C8B0:
+      Type: AWS::IAM::Policy
+      Properties:
+        PolicyDocument:
+          Statement:
+            - Action: ecs:RunTask
+              Condition:
+                ArnEquals:
+                  ecs:cluster:
+                    Fn::GetAtt:
+                      - ClusterEB0386A7
+                      - Arn
+              Effect: Allow
+              Resource:
+                Ref: JobB9D00F9F
+            - Action: iam:PassRole
+              Effect: Allow
+              Resource:
+                Fn::GetAtt:
+                  - JobExecutionRole2C045EDD
+                  - Arn
+            - Action: iam:PassRole
+              Effect: Allow
+              Resource:
+                Fn::GetAtt:
+                  - JobTaskRole8AD3B4F0
+                  - Arn
+          Version: "2012-10-17"
+        PolicyName: JobEventsRoleDefaultPolicy2850C8B0
+        Roles:
+          - Ref: JobEventsRole0634F35C
+      Metadata:
+        aws:cdk:path: EventTriggerEcsScheduledTaskStack/Job/EventsRole/DefaultPolicy/Resource
+    CDKMetadata:
+      Type: AWS::CDK::Metadata
+      Properties:
+        Modules: aws-cdk=1.54.0,@aws-cdk/assets=1.54.0,@aws-cdk/aws-applicationautoscaling=1.54.0,@aws-cdk/aws-autoscaling=1.54.0,@aws-cdk/aws-autoscaling-common=1.54.0,@aws-cdk/aws-autoscaling-hooktargets=1.54.0,@aws-cdk/aws-cloudwatch=1.54.0,@aws-cdk/aws-codeguruprofiler=1.54.0,@aws-cdk/aws-ec2=1.54.0,@aws-cdk/aws-ecr=1.54.0,@aws-cdk/aws-ecr-assets=1.54.0,@aws-cdk/aws-ecs=1.54.0,@aws-cdk/aws-elasticloadbalancingv2=1.54.0,@aws-cdk/aws-events=1.54.0,@aws-cdk/aws-events-targets=1.54.0,@aws-cdk/aws-iam=1.54.0,@aws-cdk/aws-kms=1.54.0,@aws-cdk/aws-lambda=1.54.0,@aws-cdk/aws-logs=1.54.0,@aws-cdk/aws-s3=1.54.0,@aws-cdk/aws-s3-assets=1.54.0,@aws-cdk/aws-servicediscovery=1.54.0,@aws-cdk/aws-sns=1.54.0,@aws-cdk/aws-sns-subscriptions=1.54.0,@aws-cdk/aws-sqs=1.54.0,@aws-cdk/aws-ssm=1.54.0,@aws-cdk/cloud-assembly-schema=1.54.0,@aws-cdk/core=1.54.0,@aws-cdk/custom-resources=1.54.0,@aws-cdk/cx-api=1.54.0,@aws-cdk/region-info=1.54.0,jsii-runtime=node.js/v12.16.1
+      Condition: CDKMetadataAvailable
+  Conditions:
+    CDKMetadataAvailable:
+      Fn::Or:
+        - Fn::Or:
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ap-east-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ap-northeast-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ap-northeast-2
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ap-south-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ap-southeast-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ap-southeast-2
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - ca-central-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - cn-north-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - cn-northwest-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - eu-central-1
+        - Fn::Or:
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - eu-north-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - eu-west-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - eu-west-2
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - eu-west-3
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - me-south-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - sa-east-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - us-east-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - us-east-2
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - us-west-1
+            - Fn::Equals:
+                - Ref: AWS::Region
+                - us-west-2
+  
