@@ -1,3 +1,6 @@
+## Context
+Similar to https://github.com/flyingImer/cw-alarm-trigger-lambda, this is an implementation of Fargate scheduled task instead of Lambda. The motivation is to walk around the time and artifact size of Lambda. 
+
 # Welcome to your CDK TypeScript project!
 
 This is a blank project for TypeScript development with CDK.
